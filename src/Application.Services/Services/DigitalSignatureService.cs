@@ -25,6 +25,7 @@ namespace Application.Services.Services
             string uid = Guid.NewGuid().ToString();
             string signedPath = Path.Combine(baseDir, $"signed_{uid}.pdf");
             string publicUrl = $"{scheme}://{host}/signed/signed_{uid}.pdf";
+            // string publicUrl = $"https://98b0581c0636.ngrok-free.app/signed/signed_{uid}.pdf";
 
             using var qrImage = _qrCodeService.GenerateQrWithLogo(publicUrl, logoPath);
 

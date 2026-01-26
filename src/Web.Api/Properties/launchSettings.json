@@ -1,23 +1,25 @@
-﻿{
-  "$schema": "https://json.schemastore.org/launchsettings.json",
+{
   "profiles": {
     "http": {
       "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": false,
-      "applicationUrl": "http://localhost:5140",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "AppSettings__PfxPath": "Certificates/certificate.pfx",
+        "AppSettings__PfxPassword": "password123"
+      },
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5140"
     },
     "https": {
       "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": false,
-      "applicationUrl": "https://localhost:7152;http://localhost:5140",
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "AppSettings__PfxPath": "Certificates/certificate.pfx",
+        "AppSettings__PfxPassword": "password123"
+      },
+      "dotnetRunMessages": true,
+      "applicationUrl": "https://localhost:7152;http://localhost:5140"
     }
-  }
+  },
+  "$schema": "https://json.schemastore.org/launchsettings.json"
 }

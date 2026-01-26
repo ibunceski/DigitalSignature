@@ -1,21 +1,37 @@
-﻿using Domain.Interfaces.Interfaces.Infrastructure;
+﻿using Domain.Interfaces.Common;
+using Domain.Interfaces.Interfaces.Infrastructure;
+using Infrastructure.Services.PdfHelpers;
+using iText.Bouncycastle.Crypto;
+using iText.Bouncycastle.X509;
+using iText.Commons.Bouncycastle.Cert;
 using iText.IO.Font;
 using iText.IO.Image;
+using iText.Kernel.Crypto;
 using iText.Kernel.Font;
 using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using iText.Layout;
 using iText.Layout.Element;
+using iText.Signatures;
+using Microsoft.Extensions.Options;
+using Org.BouncyCastle.Pkcs;
 using System.Drawing;
 using System.Drawing.Imaging;
-using Infrastructure.Services.PdfHelpers;
 using Image = iText.Layout.Element.Image;
+using Path = System.IO.Path;
+
 
 namespace Infrastructure.Services.Services
 {
     public class PdfProcessingService : IPdfProcessingService
     {
+        private readonly AppSettings appSettings;
+        public PdfProcessingService(IOptions<AppSettings> appSettings)
+        {
+            this.appSettings = appSettings.Value;
+        }
+
         public void SignAndSavePdf(Stream sourceStream, string outputPath, Bitmap qrImage, string publicUrl, string fontPath)
         {
             sourceStream.Position = 0;
@@ -42,7 +58,8 @@ namespace Infrastructure.Services.Services
             float bottomMargin = 120;
             bool enoughSpace = (pageHeight - lowestY - bottomMargin) >= overlayHeight;
 
-            using var writer = new PdfWriter(outputPath);
+            string tempPdf = Path.GetTempFileName();
+            using var writer = new PdfWriter(tempPdf);
             using var resultDoc = new PdfDocument(writer);
 
             using (var reader = new PdfReader(sourceStream))
@@ -57,6 +74,46 @@ namespace Infrastructure.Services.Services
                 : resultDoc.AddNewPage(pageSize);
 
             GenerateOverlayPdf(targetPage, qrImage, publicUrl, pageHeight, enoughSpace, fontPath);
+            resultDoc.Close();
+            CryptographicallySignPdf(tempPdf, outputPath);
+        }
+
+        public void CryptographicallySignPdf(string inputPdf, string outputPdf)
+        {
+            var pfxPath = appSettings.PfxPath;
+            var pfxPassword = appSettings.PfxPassword;
+
+            using (PdfReader reader = new PdfReader(inputPdf))
+            using (FileStream outputStream = new FileStream(outputPdf, FileMode.Create))
+            {
+                PdfSigner signer = new PdfSigner(reader, outputStream, new StampingProperties());
+
+                Pkcs12Store pkcs12 = new Pkcs12StoreBuilder().Build();
+                using (var pfxStream = File.OpenRead(pfxPath))
+                {
+                    pkcs12.Load(pfxStream, pfxPassword.ToCharArray());
+                }
+
+                string alias = pkcs12.Aliases.Cast<string>().FirstOrDefault(a => pkcs12.IsKeyEntry(a));
+                AsymmetricKeyEntry keyEntry = pkcs12.GetKey(alias);
+                X509CertificateEntry[] chainEntries = pkcs12.GetCertificateChain(alias);
+
+                IX509Certificate[] iTextChain = chainEntries
+                    .Select(c => new X509CertificateBC(c.Certificate))
+                    .ToArray();
+
+                IExternalSignature signature = new PrivateKeySignature(
+                    new PrivateKeyBC(keyEntry.Key),
+                    DigestAlgorithms.SHA256
+                );
+
+                signer.SignDetached(
+                    signature,
+                    iTextChain,
+                    null, null, null, 0,
+                    PdfSigner.CryptoStandard.CADES
+                );
+            }
         }
 
         private float MeasureLowestY(PdfPage page, PdfDocument doc)
@@ -155,5 +212,6 @@ namespace Infrastructure.Services.Services
             canvas.Add(table.SetMarginLeft(leftMargin).SetFixedPosition(leftMargin, y, tableWidth));
             canvas.Close();
         }
+
     }
 }
